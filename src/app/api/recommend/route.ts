@@ -1,7 +1,15 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { enrichRecommendedGamesWithRawg } from "@/src/lib/rawg";
 
 export const runtime = "nodejs";
+
+function isRawgEnabled() {
+  const mode = (process.env.RAWG_ENRICHMENT ?? "auto").toLowerCase();
+  if (mode === "off") return false;
+  if (mode === "on") return true;
+  return Boolean(process.env.RAWG_API_KEY);
+}
 
 export async function POST(req: Request) {
   const { prompt } = (await req.json().catch(() => ({}))) as { prompt?: string };
@@ -37,7 +45,7 @@ Step 1: Intent Recognition - Extract game names, emotions, scenarios, and prefer
 Step 2: Multi-Agent Simulation - Simulate a discussion between three distinct personas:
 1. The Hardcore Strategist: Focuses on gameplay mechanics, difficulty, depth, and replayability.
 2. The Aesthetic Critic: Focuses on art style, music, narrative atmosphere, and emotional resonance.
-3. The Budget Expert: Focuses on current price, historical lows, and "bang for your buck."
+3. The Budget Expert: Focuses on value, "bang for your buck," and smart buying advice (do not output real-time prices).
 Step 3: Synthesis - The JoyMate Host summarizes the findings into a friendly, friend-like recommendation.
 
 Output your response ONLY in JSON format with this shape:
@@ -56,8 +64,7 @@ Output your response ONLY in JSON format with this shape:
     "title": string,
     "reason": string,
     "match_percentage": number,
-    "image_keyword": string,
-    "price_estimate": string
+    "image_keyword": string
   }>
 }`,
         },
@@ -77,10 +84,51 @@ Output your response ONLY in JSON format with this shape:
       return new NextResponse("No response text", { status: 502 });
     }
 
-    const jsonResponse = JSON.parse(content);
+    const jsonResponse = JSON.parse(content) as any;
+    const rawgKey = process.env.RAWG_API_KEY;
+    const rawgMode = (process.env.RAWG_ENRICHMENT ?? "auto").toLowerCase();
+
+    let rawgStats: { enabled: boolean; mode: string; total: number; enriched: number; ms: number } | null = null;
+    if (Array.isArray(jsonResponse?.recommended_games)) {
+      const total = jsonResponse.recommended_games.length;
+      const enabled = isRawgEnabled();
+      if (enabled && rawgKey) {
+        const t0 = Date.now();
+        const enriched = await enrichRecommendedGamesWithRawg(jsonResponse.recommended_games, rawgKey, {
+          maxGames: 6,
+          concurrency: 2,
+          pageSize: 5,
+          timeoutMs: 4500,
+        });
+        const ms = Date.now() - t0;
+        const enrichedCount = enriched.filter((g: any) => typeof g?.rawg_id === "number").length;
+        jsonResponse.recommended_games = enriched;
+        rawgStats = { enabled: true, mode: rawgMode, total, enriched: enrichedCount, ms };
+        console.info(
+          JSON.stringify({
+            event: "rawg_enrich",
+            route: "/api/recommend",
+            total,
+            enriched: enrichedCount,
+            ms,
+          }),
+        );
+      } else {
+        rawgStats = { enabled: false, mode: rawgMode, total, enriched: 0, ms: 0 };
+        if (rawgMode === "on" && !rawgKey) {
+          console.warn(
+            JSON.stringify({
+              event: "rawg_disabled_missing_key",
+              route: "/api/recommend",
+            }),
+          );
+        }
+      }
+    }
     return NextResponse.json({
       ...jsonResponse,
       thinking_time: thinkingTimeSeconds,
+      rawg: rawgStats,
     });
   } catch (err: any) {
     // 针对配额不足等情况，返回友好的文案，避免前端直接报错
