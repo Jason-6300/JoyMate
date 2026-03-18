@@ -1,4 +1,4 @@
-// File: d:\JoyMate\src\app\api\featured\route.ts
+// File: D:\JoyMate\src\app\api\featured\route.ts
 import * as entry from '../../../../../src/app/api/featured/route.js'
 import type { NextRequest } from 'next/server.js'
 
