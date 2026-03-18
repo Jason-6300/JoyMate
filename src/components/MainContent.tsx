@@ -1,10 +1,359 @@
 import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
-import { Send, Image as ImageIcon, Sparkles, Bot, ShieldAlert, Palette, Coins } from 'lucide-react';
+import { Send, Image as ImageIcon, Sparkles, Bot, ShieldAlert, Palette, Coins, Gamepad2, Heart, Clock, ChevronRight, X, Zap, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { getGameRecommendation } from '../services/gemini';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import GameDetailsModal from './GameDetailsModal';
 import { toZhLabel, toZhLabels } from '../lib/gameI18n';
+
+// ============================================================
+// 新手引导向导组件
+// ============================================================
+type OnboardingData = {
+  favoriteGames: string[];
+  mood: string;
+  timeCommitment: string;
+};
+
+const MOOD_OPTIONS = [
+  { id: 'relax', label: '放松解压', emoji: '😌', desc: '想轻松一下，不想太累' },
+  { id: 'excite', label: '刺激爽快', emoji: '🔥', desc: '想要肾上腺素飙升' },
+  { id: 'touch', label: '感动沉浸', emoji: '💧', desc: '想要好故事、好氛围' },
+  { id: 'explore', label: '探索发现', emoji: '🗺️', desc: '想要新奇体验' },
+  { id: 'social', label: '社交互动', emoji: '👥', desc: '想和朋友一起玩' },
+];
+
+const TIME_OPTIONS = [
+  { id: 'fragment', label: '碎片时间', desc: '10-30分钟一局' },
+  { id: 'weekend', label: '周末消遣', desc: '1-3小时沉浸' },
+  { id: 'vacation', label: '长假投入', desc: '愿意深度体验' },
+];
+
+// 首次引导卡片（显示在顶部）
+function OnboardingCard({ onComplete, onSkip }: { onComplete: (data: OnboardingData) => void; onSkip: () => void }) {
+  const [step, setStep] = useState(0);
+  const [favoriteGames, setFavoriteGames] = useState<string[]>(['', '', '']);
+  const [mood, setMood] = useState('');
+  const [timeCommitment, setTimeCommitment] = useState('');
+
+  const handleGameInput = (idx: number, value: string) => {
+    const newGames = [...favoriteGames];
+    newGames[idx] = value;
+    setFavoriteGames(newGames);
+  };
+
+  const canProceed = () => {
+    if (step === 0) return favoriteGames.some(g => g.trim().length > 0);
+    if (step === 1) return mood.length > 0;
+    if (step === 2) return timeCommitment.length > 0;
+    return false;
+  };
+
+  const handleNext = () => {
+    if (step < 2) {
+      setStep(step + 1);
+    } else {
+      onComplete({
+        favoriteGames: favoriteGames.filter(g => g.trim().length > 0),
+        mood,
+        timeCommitment,
+      });
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="bg-gradient-to-br from-blue-900/30 via-[#151820] to-purple-900/20 rounded-2xl border border-blue-500/30 p-6 mb-8 relative overflow-hidden"
+    >
+      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl"></div>
+      <div className="absolute bottom-0 left-0 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl"></div>
+      
+      <button
+        onClick={onSkip}
+        className="absolute top-4 right-4 p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+      >
+        <X size={18} />
+      </button>
+
+      <div className="flex items-center gap-2 mb-6">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className={`h-1.5 flex-1 rounded-full transition-colors ${
+              i <= step ? 'bg-blue-500' : 'bg-white/10'
+            }`}
+          />
+        ))}
+      </div>
+
+      {step === 0 && (
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+              <Gamepad2 className="text-blue-400" size={20} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">你最近喜欢的游戏？</h3>
+              <p className="text-xs text-gray-400">填写 1-3 款，让 AI 更懂你的口味</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {favoriteGames.map((game, idx) => (
+              <input
+                key={idx}
+                type="text"
+                value={game}
+                onChange={(e) => handleGameInput(idx, e.target.value)}
+                placeholder={idx === 0 ? '例如：艾尔登法环' : idx === 1 ? '例如：空洞骑士' : '例如：星露谷物语'}
+                className="w-full bg-[#0a0c10] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 transition-colors"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {step === 1 && (
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-pink-500/20 flex items-center justify-center">
+              <Heart className="text-pink-400" size={20} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">你现在的心情是？</h3>
+              <p className="text-xs text-gray-400">选择最符合你当下状态的一项</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {MOOD_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => setMood(opt.id)}
+                className={`p-4 rounded-xl border text-left transition-all ${
+                  mood === opt.id
+                    ? 'bg-blue-500/20 border-blue-500/50 text-white'
+                    : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{opt.emoji}</span>
+                  <div>
+                    <div className="font-medium">{opt.label}</div>
+                    <div className="text-xs text-gray-400">{opt.desc}</div>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+              <Clock className="text-emerald-400" size={20} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">你能投入多少时间？</h3>
+              <p className="text-xs text-gray-400">帮你匹配适合的游戏节奏</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {TIME_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => setTimeCommitment(opt.id)}
+                className={`p-4 rounded-xl border text-center transition-all ${
+                  timeCommitment === opt.id
+                    ? 'bg-blue-500/20 border-blue-500/50 text-white'
+                    : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+                }`}
+              >
+                <div className="font-medium mb-1">{opt.label}</div>
+                <div className="text-xs text-gray-400">{opt.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mt-6 relative z-10">
+        <button
+          onClick={() => setStep(Math.max(0, step - 1))}
+          className={`px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors ${
+            step === 0 ? 'invisible' : ''
+          }`}
+        >
+          上一步
+        </button>
+        <button
+          onClick={handleNext}
+          disabled={!canProceed()}
+          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium rounded-xl transition-colors flex items-center gap-2"
+        >
+          {step === 2 ? '开始推荐' : '下一步'}
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+// 底部快捷偏好面板（可折叠）
+function QuickPreferencePanel({
+  initialData,
+  onRecommend,
+  isBusy,
+}: {
+  initialData: OnboardingData;
+  onRecommend: (data: OnboardingData) => void;
+  isBusy: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [favoriteGames, setFavoriteGames] = useState<string[]>(initialData.favoriteGames.length ? initialData.favoriteGames : ['', '', '']);
+  const [mood, setMood] = useState(initialData.mood);
+  const [timeCommitment, setTimeCommitment] = useState(initialData.timeCommitment);
+
+  // 同步外部数据变化
+  useEffect(() => {
+    if (initialData.favoriteGames.length) {
+      setFavoriteGames([...initialData.favoriteGames, '', '', ''].slice(0, 3));
+    }
+    if (initialData.mood) setMood(initialData.mood);
+    if (initialData.timeCommitment) setTimeCommitment(initialData.timeCommitment);
+  }, [initialData]);
+
+  const handleGameInput = (idx: number, value: string) => {
+    const newGames = [...favoriteGames];
+    newGames[idx] = value;
+    setFavoriteGames(newGames);
+  };
+
+  const handleRecommend = () => {
+    onRecommend({
+      favoriteGames: favoriteGames.filter(g => g.trim().length > 0),
+      mood,
+      timeCommitment,
+    });
+  };
+
+  const getMoodLabel = () => MOOD_OPTIONS.find(o => o.id === mood)?.label || '未选择';
+  const getTimeLabel = () => TIME_OPTIONS.find(o => o.id === timeCommitment)?.label || '未选择';
+
+  return (
+    <div className="bg-[#151820] rounded-2xl border border-white/10 overflow-hidden">
+      {/* 折叠头部 */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <Zap className="text-yellow-400" size={18} />
+          <span className="text-sm font-medium text-white">快捷偏好</span>
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <span className="px-2 py-0.5 bg-white/5 rounded-full">{getMoodLabel()}</span>
+            <span className="px-2 py-0.5 bg-white/5 rounded-full">{getTimeLabel()}</span>
+          </div>
+        </div>
+        {expanded ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+      </button>
+
+      {/* 展开内容 */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 space-y-4 border-t border-white/5 pt-4">
+              {/* 喜欢的游戏 */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Gamepad2 size={14} className="text-blue-400" />
+                  <span className="text-xs font-medium text-gray-300">最近喜欢的游戏</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {favoriteGames.map((game, idx) => (
+                    <input
+                      key={idx}
+                      type="text"
+                      value={game}
+                      onChange={(e) => handleGameInput(idx, e.target.value)}
+                      placeholder={idx === 0 ? '游戏名' : '可选'}
+                      className="flex-1 min-w-[120px] bg-[#0a0c10] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* 心情选择 */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Heart size={14} className="text-pink-400" />
+                  <span className="text-xs font-medium text-gray-300">当前心情</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {MOOD_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setMood(opt.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs transition-all ${
+                        mood === opt.id
+                          ? 'bg-blue-500/20 border border-blue-500/50 text-blue-300'
+                          : 'bg-white/5 border border-white/10 text-gray-400 hover:bg-white/10'
+                      }`}
+                    >
+                      {opt.emoji} {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 时间投入 */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock size={14} className="text-emerald-400" />
+                  <span className="text-xs font-medium text-gray-300">时间投入</span>
+                </div>
+                <div className="flex gap-2">
+                  {TIME_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setTimeCommitment(opt.id)}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs transition-all ${
+                        timeCommitment === opt.id
+                          ? 'bg-blue-500/20 border border-blue-500/50 text-blue-300'
+                          : 'bg-white/5 border border-white/10 text-gray-400 hover:bg-white/10'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 推荐按钮 */}
+              <button
+                onClick={handleRecommend}
+                disabled={isBusy || !mood || !timeCommitment || !favoriteGames.some(g => g.trim())}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                <RefreshCw size={16} className={isBusy ? 'animate-spin' : ''} />
+                {isBusy ? '推荐中...' : '重新推荐'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 // Typewriter component for smoother text reveal
 const TypewriterText = memo(({ text, speed = 25, onComplete, onCharTyped }: { text: string; speed?: number; onComplete?: () => void; onCharTyped?: () => void }) => {
@@ -68,6 +417,26 @@ type SessionMemory = {
 };
 
 export default function MainContent({ onOpenImageModal, quickPrompt }: { onOpenImageModal: () => void; quickPrompt?: { id: number; text: string } | null }) {
+  // 新手引导状态 - 使用 useEffect 避免 hydration 错误
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [userPreference, setUserPreference] = useState<OnboardingData | null>(null);
+
+  // 客户端初始化
+  useEffect(() => {
+    setIsHydrated(true);
+    try {
+      const completed = localStorage.getItem('joymate_onboarding_completed');
+      const savedPreference = localStorage.getItem('joymate_user_preference');
+      setShowOnboarding(!completed);
+      if (savedPreference) {
+        setUserPreference(JSON.parse(savedPreference));
+      }
+    } catch {
+      setShowOnboarding(true);
+    }
+  }, []);
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -282,6 +651,90 @@ export default function MainContent({ onOpenImageModal, quickPrompt }: { onOpenI
     setSelectedGame(null);
   }, []);
 
+  // 处理新手引导完成
+  const handleOnboardingComplete = useCallback((data: OnboardingData) => {
+    // 标记已完成引导，保存偏好数据
+    try {
+      localStorage.setItem('joymate_onboarding_completed', 'true');
+      localStorage.setItem('joymate_user_preference', JSON.stringify(data));
+    } catch {}
+    setShowOnboarding(false);
+    setUserPreference(data);
+
+    // 更新 sessionMemory 中的 liked
+    if (data.favoriteGames.length > 0) {
+      setSessionMemory(prev => ({
+        ...prev,
+        liked: [...prev.liked, ...data.favoriteGames].slice(-30),
+      }));
+    }
+
+    // 发送推荐请求
+    sendRecommendRequest(data);
+  }, []);
+
+  // 跳过新手引导
+  const handleOnboardingSkip = useCallback(() => {
+    try {
+      localStorage.setItem('joymate_onboarding_completed', 'true');
+    } catch {}
+    setShowOnboarding(false);
+  }, []);
+
+  // 从偏好数据发送推荐请求
+  const sendRecommendRequest = useCallback((data: OnboardingData) => {
+    const moodMap: Record<string, string> = {
+      relax: '放松解压、不想太累',
+      excite: '刺激爽快、肾上腺素飙升',
+      touch: '感动沉浸、好故事好氛围',
+      explore: '探索发现、新奇体验',
+      social: '社交互动、和朋友一起玩',
+    };
+    const timeMap: Record<string, string> = {
+      fragment: '碎片时间（10-30分钟一局）',
+      weekend: '周末消遣（1-3小时沉浸）',
+      vacation: '长假投入（愿意深度体验）',
+    };
+
+    const promptParts = [
+      '用户通过引导问卷表达了以下偏好：',
+      data.favoriteGames.length > 0 ? `- 最近喜欢的游戏：${data.favoriteGames.join('、')}` : '',
+      `- 当前心情：${moodMap[data.mood] || data.mood}`,
+      `- 时间投入：${timeMap[data.timeCommitment] || data.timeCommitment}`,
+      '',
+      '请根据以上信息，为用户推荐 4 款最适合的游戏。注意：',
+      '1. 结合用户喜欢的游戏风格进行推荐',
+      '2. 匹配用户当前的心情需求',
+      '3. 考虑用户的时间投入能力（碎片时间推荐短局游戏，长假推荐深度游戏）',
+      '4. 每款游戏都要说明为什么适合用户的当前状态',
+    ].filter(Boolean);
+
+    handleSend({
+      displayText: `帮我推荐游戏（基于引导问卷：${data.favoriteGames.join('、') || '无特定偏好'} / ${moodMap[data.mood]} / ${timeMap[data.timeCommitment]}）`,
+      promptText: promptParts.join('\n'),
+      updateIntent: true,
+    });
+  }, [handleSend]);
+
+  // 从底部面板重新推荐
+  const handleQuickRecommend = useCallback((data: OnboardingData) => {
+    // 保存新的偏好数据
+    try {
+      localStorage.setItem('joymate_user_preference', JSON.stringify(data));
+    } catch {}
+    setUserPreference(data);
+
+    // 更新 sessionMemory 中的 liked
+    if (data.favoriteGames.length > 0) {
+      setSessionMemory(prev => ({
+        ...prev,
+        liked: [...prev.liked, ...data.favoriteGames].slice(-30),
+      }));
+    }
+
+    sendRecommendRequest(data);
+  }, [sendRecommendRequest]);
+
   // Staggered animation variants for game cards
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -312,7 +765,17 @@ export default function MainContent({ onOpenImageModal, quickPrompt }: { onOpenI
 
       <div className="flex-1 overflow-y-auto custom-scrollbar relative">
         <div className="max-w-4xl mx-auto p-8">
-          <div className="text-center mb-10">
+          {/* 标题区域 - 双击可重置引导状态 */}
+          <div 
+            className="text-center mb-10"
+            onDoubleClick={() => {
+              localStorage.removeItem('joymate_onboarding_completed');
+              localStorage.removeItem('joymate_user_preference');
+              setShowOnboarding(true);
+              setUserPreference(null);
+            }}
+            title="双击重置引导状态"
+          >
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-medium mb-4 border border-blue-500/20">
               <Sparkles size={12} />
               AI Analysis Active
@@ -322,6 +785,16 @@ export default function MainContent({ onOpenImageModal, quickPrompt }: { onOpenI
             </h1>
             <p className="text-gray-400 text-sm">基于深度学习算法，分析你的游戏DNA，精准匹配最适合你的沉浸式体验</p>
           </div>
+
+          {/* 新手引导卡片 */}
+          <AnimatePresence>
+            {isHydrated && showOnboarding && (
+              <OnboardingCard
+                onComplete={handleOnboardingComplete}
+                onSkip={handleOnboardingSkip}
+              />
+            )}
+          </AnimatePresence>
 
           {/* Chat Container */}
           <div className="bg-[#151820] rounded-2xl border border-white/5 shadow-2xl overflow-hidden flex flex-col mb-12">
@@ -612,6 +1085,7 @@ export default function MainContent({ onOpenImageModal, quickPrompt }: { onOpenI
                   className="w-full bg-[#0a0c10] border border-white/10 rounded-xl py-3 pl-4 pr-24 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors"
                 />
                 <div className="absolute right-2 flex items-center gap-2">
+                  {/* 图片生成按钮暂时屏蔽
                   <button 
                     onClick={onOpenImageModal}
                     className="p-2 text-gray-400 hover:text-purple-400 hover:bg-purple-400/10 rounded-lg transition-colors"
@@ -619,6 +1093,7 @@ export default function MainContent({ onOpenImageModal, quickPrompt }: { onOpenI
                   >
                     <ImageIcon size={18} />
                   </button>
+                  */}
                   <button 
                     onClick={() => handleSend()}
                     disabled={!input.trim()}
@@ -637,6 +1112,17 @@ export default function MainContent({ onOpenImageModal, quickPrompt }: { onOpenI
               </div>
             </div>
           </div>
+
+          {/* 快捷偏好面板 - 引导完成后显示在底部 */}
+          {isHydrated && userPreference && !showOnboarding && (
+            <div className="mt-8">
+              <QuickPreferencePanel
+                initialData={userPreference}
+                onRecommend={handleQuickRecommend}
+                isBusy={isBusy}
+              />
+            </div>
+          )}
 
           {/* Static Recommendations Section (from UI mockup) */}
           <div className="mt-16">
@@ -684,6 +1170,19 @@ export default function MainContent({ onOpenImageModal, quickPrompt }: { onOpenI
         </div>
       </div>
       {selectedGame && <GameDetailsModal game={selectedGame} onClose={closeGame} />}
+      
+      {/* 反馈入口 - 固定在右下角 */}
+      <a
+        href="https://my.feishu.cn/wiki/IHFOwNOBiinV2Tk2Ve8cMmg1nic"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-full text-sm text-gray-400 hover:text-white transition-all backdrop-blur-sm"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+        </svg>
+        <span>提点建议</span>
+      </a>
     </div>
   );
 }

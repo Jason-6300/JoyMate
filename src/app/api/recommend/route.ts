@@ -31,6 +31,15 @@ export async function POST(req: Request) {
   });
 
   const startTime = Date.now();
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  
+  console.info(JSON.stringify({
+    event: "recommend_start",
+    requestId,
+    promptLength: prompt.length,
+    timestamp: new Date().toISOString(),
+  }));
+  
   try {
     const completion = await client.chat.completions.create({
       model: "qwen3.5-plus",
@@ -85,6 +94,15 @@ Output your response ONLY in JSON format with this shape:
     }
 
     const jsonResponse = JSON.parse(content) as any;
+    
+    console.info(JSON.stringify({
+      event: "recommend_success",
+      requestId,
+      thinkingTime: thinkingTimeSeconds,
+      gamesCount: Array.isArray(jsonResponse?.recommended_games) ? jsonResponse.recommended_games.length : 0,
+      totalTime: Date.now() - startTime,
+    }));
+    
     const rawgKey = process.env.RAWG_API_KEY;
     const rawgMode = (process.env.RAWG_ENRICHMENT ?? "auto").toLowerCase();
 
@@ -107,6 +125,7 @@ Output your response ONLY in JSON format with this shape:
         console.info(
           JSON.stringify({
             event: "rawg_enrich",
+            requestId,
             route: "/api/recommend",
             total,
             enriched: enrichedCount,
@@ -131,9 +150,18 @@ Output your response ONLY in JSON format with this shape:
       rawg: rawgStats,
     });
   } catch (err: any) {
-    // 针对配额不足等情况，返回友好的文案，避免前端直接报错
     const status = err?.status ?? err?.statusCode ?? err?.response?.status;
     const msg = String(err?.message ?? "");
+    
+    console.error(JSON.stringify({
+      event: "recommend_error",
+      requestId,
+      error: msg,
+      status,
+      totalTime: Date.now() - startTime,
+    }));
+    
+    // 针对配额不足等情况，返回友好的文案，避免前端直接报错
     if (status === 429 || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED")) {
       return NextResponse.json({
         aesthetic_critic: "",
