@@ -7,9 +7,19 @@
 - [src/app/api/generate-art/route.ts](file://src/app/api/generate-art/route.ts)
 - [src/services/gemini.ts](file://src/services/gemini.ts)
 - [src/lib/rawg.ts](file://src/lib/rawg.ts)
+- [.next-joymate/types/app/api/recommend/route.ts](file://.next-joymate/types/app/api/recommend/route.ts)
+- [.next-joymate/types/app/api/featured/route.ts](file://.next-joymate/types/app/api/featured/route.ts)
+- [.next-joymate/types/app/api/generate-art/route.ts](file://.next-joymate/types/app/api/generate-art/route.ts)
 - [README.md](file://README.md)
 - [DESIGN_DOC.md](file://DESIGN_DOC.md)
 </cite>
+
+## 更新摘要
+**所做更改**
+- 新增了Next.js App Router架构下的API路由类型定义文件分析
+- 更新了API端点结构说明，反映新的类型安全机制
+- 增强了API路由的类型系统和参数验证说明
+- 补充了API端点的完整HTTP方法支持说明
 
 ## 目录
 1. [简介](#简介)
@@ -31,15 +41,22 @@
 
 文档将详细说明每个端点的 HTTP 方法、请求参数、响应格式、错误处理机制，深入分析 gemini.ts 服务封装的实现，包括 AI 模型调用、提示词工程和输出格式化。同时阐述安全考虑、速率限制和性能优化策略，并提供完整的 API 使用示例和集成指南。
 
+**更新** 新增了Next.js App Router架构下的API路由类型定义分析，展示了新的类型安全机制和完整的HTTP方法支持。
+
 ## 项目结构
-项目采用 Next.js App Router 架构，API 端点位于 src/app/api 下，服务封装位于 src/services，数据增强逻辑位于 src/lib。
+项目采用 Next.js App Router 架构，API 端点位于 src/app/api 下，服务封装位于 src/services，数据增强逻辑位于 src/lib。系统还包括自动生成的类型定义文件，提供编译时类型检查和IDE支持。
 
 ```mermaid
 graph TB
 subgraph "API 层"
-R["/api/recommend<br/>POST"]
-F["/api/featured<br/>GET"]
-G["/api/generate-art<br/>POST"]
+R["/api/recommend<br/>POST/GET/PUT/DELETE/PATCH"]
+F["/api/featured<br/>GET/POST/PUT/DELETE/PATCH"]
+G["/api/generate-art<br/>POST/GET/PUT/DELETE/PATCH"]
+end
+subgraph "类型定义层"
+TR[".next-joymate/types/app/api/recommend/route.ts"]
+TF[".next-joymate/types/app/api/featured/route.ts"]
+TG[".next-joymate/types/app/api/generate-art/route.ts"]
 end
 subgraph "服务层"
 S1["gemini.ts<br/>客户端封装"]
@@ -58,55 +75,63 @@ S1 --> R
 S1 --> G
 S2 --> R
 S2 --> F
+TR --> R
+TF --> F
+TG --> G
 ```
 
 **图表来源**
-- [src/app/api/recommend/route.ts:1-157](file://src/app/api/recommend/route.ts#L1-L157)
+- [src/app/api/recommend/route.ts:1-185](file://src/app/api/recommend/route.ts#L1-L185)
 - [src/app/api/featured/route.ts:1-84](file://src/app/api/featured/route.ts#L1-L84)
 - [src/app/api/generate-art/route.ts:1-61](file://src/app/api/generate-art/route.ts#L1-L61)
-- [src/services/gemini.ts:1-32](file://src/services/gemini.ts#L1-L32)
-- [src/lib/rawg.ts:1-434](file://src/lib/rawg.ts#L1-L434)
+- [.next-joymate/types/app/api/recommend/route.ts:1-348](file://.next-joymate/types/app/api/recommend/route.ts#L1-L348)
+- [.next-joymate/types/app/api/featured/route.ts:1-348](file://.next-joymate/types/app/api/featured/route.ts#L1-L348)
+- [.next-joymate/types/app/api/generate-art/route.ts:1-348](file://.next-joymate/types/app/api/generate-art/route.ts#L1-L348)
 
 **章节来源**
-- [src/app/api/recommend/route.ts:1-157](file://src/app/api/recommend/route.ts#L1-L157)
+- [src/app/api/recommend/route.ts:1-185](file://src/app/api/recommend/route.ts#L1-L185)
 - [src/app/api/featured/route.ts:1-84](file://src/app/api/featured/route.ts#L1-L84)
 - [src/app/api/generate-art/route.ts:1-61](file://src/app/api/generate-art/route.ts#L1-L61)
-- [src/services/gemini.ts:1-32](file://src/services/gemini.ts#L1-L32)
-- [src/lib/rawg.ts:1-434](file://src/lib/rawg.ts#L1-L434)
+- [.next-joymate/types/app/api/recommend/route.ts:1-348](file://.next-joymate/types/app/api/recommend/route.ts#L1-L348)
+- [.next-joymate/types/app/api/featured/route.ts:1-348](file://.next-joymate/types/app/api/featured/route.ts#L1-L348)
+- [.next-joymate/types/app/api/generate-art/route.ts:1-348](file://.next-joymate/types/app/api/generate-art/route.ts#L1-L348)
 
 ## 核心组件
 本节概述三个 API 端点的功能职责、输入输出规范和关键特性。
 
-- /api/recommend（POST）
+- /api/recommend（POST/GET/PUT/DELETE/PATCH）
   - 功能：接收用户输入的自然语言提示，通过 OpenAI 兼容接口（默认 Qwen）生成多智能体讨论后的 JSON 结构化推荐结果
   - 关键特性：系统提示词工程、JSON 输出约束、RAWG 数据增强、配额不足友好降级
   - 响应字段：intent（意图识别）、aesthetic_critic、hardcore_strategist、budget_expert、host_message、recommended_games（含标题、理由、匹配度、图像关键词）
 
-- /api/featured（GET）
+- /api/featured（GET/POST/PUT/DELETE/PATCH）
   - 功能：返回首页推荐的热门游戏基础信息
   - 关键特性：本地缓存（24 小时）、RAWG 数据增强、无 API Key 时的回退方案
   - 响应字段：featured 数组，包含标题、英文名、封面、评分、平台、类型等
 
-- /api/generate-art（POST）
+- /api/generate-art（POST/GET/PUT/DELETE/PATCH）
   - 功能：基于文本提示生成游戏概念图
   - 关键特性：Gemini 图像模型调用、尺寸控制（1K/2K/4K）、配额不足友好降级
   - 响应字段：imageUrl（Base64 数据 URI）
 
 **章节来源**
-- [src/app/api/recommend/route.ts:14-157](file://src/app/api/recommend/route.ts#L14-L157)
+- [src/app/api/recommend/route.ts:14-185](file://src/app/api/recommend/route.ts#L14-L185)
 - [src/app/api/featured/route.ts:26-84](file://src/app/api/featured/route.ts#L26-L84)
 - [src/app/api/generate-art/route.ts:6-61](file://src/app/api/generate-art/route.ts#L6-L61)
 
 ## 架构概览
-API 服务层采用分层架构，包含路由层、业务逻辑层、数据增强层和外部服务集成层。
+API 服务层采用分层架构，包含路由层、业务逻辑层、数据增强层和外部服务集成层。新的类型定义系统提供了编译时类型安全和IDE支持。
 
 ```mermaid
 sequenceDiagram
 participant C as "客户端"
+participant RT as "路由类型定义"
 participant R as "推荐路由"
 participant O as "OpenAI 客户端"
 participant RA as "RAWG 增强"
 participant RAWG as "RAWG API"
+C->>RT : 类型检查请求
+RT-->>C : 编译时验证
 C->>R : POST /api/recommend {prompt}
 R->>R : 解析请求与校验
 R->>O : chat.completions.create(JSON)
@@ -119,8 +144,9 @@ R-->>C : 结构化推荐结果
 ```
 
 **图表来源**
-- [src/app/api/recommend/route.ts:33-132](file://src/app/api/recommend/route.ts#L33-L132)
+- [src/app/api/recommend/route.ts:44-151](file://src/app/api/recommend/route.ts#L44-L151)
 - [src/lib/rawg.ts:351-433](file://src/lib/rawg.ts#L351-L433)
+- [.next-joymate/types/app/api/recommend/route.ts:151-187](file://.next-joymate/types/app/api/recommend/route.ts#L151-L187)
 
 ## 详细组件分析
 
@@ -129,6 +155,7 @@ R-->>C : 结构化推荐结果
 
 - HTTP 方法与路径
   - POST /api/recommend
+  - 支持的HTTP方法：GET、POST、PUT、DELETE、PATCH（类型定义支持）
 
 - 请求参数
   - Content-Type: application/json
@@ -179,10 +206,10 @@ Err500 --> End
 ```
 
 **图表来源**
-- [src/app/api/recommend/route.ts:14-157](file://src/app/api/recommend/route.ts#L14-L157)
+- [src/app/api/recommend/route.ts:14-185](file://src/app/api/recommend/route.ts#L14-L185)
 
 **章节来源**
-- [src/app/api/recommend/route.ts:14-157](file://src/app/api/recommend/route.ts#L14-L157)
+- [src/app/api/recommend/route.ts:14-185](file://src/app/api/recommend/route.ts#L14-L185)
 - [src/lib/rawg.ts:351-433](file://src/lib/rawg.ts#L351-L433)
 
 ### /api/featured（首页推荐数据）
@@ -190,6 +217,7 @@ Err500 --> End
 
 - HTTP 方法与路径
   - GET /api/featured
+  - 支持的HTTP方法：GET、POST、PUT、DELETE、PATCH（类型定义支持）
 
 - 请求参数
   - 无
@@ -225,6 +253,7 @@ Err500 --> End
 
 - HTTP 方法与路径
   - POST /api/generate-art
+  - 支持的HTTP方法：GET、POST、PUT、DELETE、PATCH（类型定义支持）
 
 - 请求参数
   - Content-Type: application/json
@@ -290,6 +319,25 @@ Err500 --> End
 - [src/lib/rawg.ts:252-342](file://src/lib/rawg.ts#L252-L342)
 - [src/lib/rawg.ts:351-433](file://src/lib/rawg.ts#L351-L433)
 
+### Next.js App Router 类型定义系统
+新的类型定义系统提供了编译时类型安全和IDE支持。
+
+- 类型验证范围
+  - 支持的HTTP方法：GET、HEAD、OPTIONS、POST、PUT、DELETE、PATCH
+  - 请求参数类型检查：Request | NextRequest
+  - 响应类型检查：Response | void | never | Promise<Response | void | never>
+  - 上下文参数：{ params: Promise<SegmentParams> }
+
+- 类型安全特性
+  - 参数位置验证：__param_position__ 确保正确的参数顺序
+  - 返回类型验证：__return_type__ 确保正确的返回值类型
+  - 运行时配置：runtime、dynamic、fetchCache 等配置项的类型检查
+
+**章节来源**
+- [.next-joymate/types/app/api/recommend/route.ts:1-348](file://.next-joymate/types/app/api/recommend/route.ts#L1-L348)
+- [.next-joymate/types/app/api/featured/route.ts:1-348](file://.next-joymate/types/app/api/featured/route.ts#L1-L348)
+- [.next-joymate/types/app/api/generate-art/route.ts:1-348](file://.next-joymate/types/app/api/generate-art/route.ts#L1-L348)
+
 ## 依赖关系分析
 
 ```mermaid
@@ -298,6 +346,11 @@ subgraph "API 路由"
 RECOMMEND["/api/recommend"]
 FEATURED["/api/featured"]
 GENERATE["/api/generate-art"]
+end
+subgraph "类型定义"
+TYPE_RECOMMEND[".next-joymate/types/app/api/recommend/route.ts"]
+TYPE_FEATURED[".next-joymate/types/app/api/featured/route.ts"]
+TYPE_GENERATE[".next-joymate/types/app/api/generate-art/route.ts"]
 end
 subgraph "服务封装"
 GEMINI["gemini.ts"]
@@ -317,21 +370,26 @@ GENERATE --> GEMINI_API
 GEMINI --> RECOMMEND
 GEMINI --> GENERATE
 RAWG --> RAWG_API
+TYPE_RECOMMEND --> RECOMMEND
+TYPE_FEATURED --> FEATURED
+TYPE_GENERATE --> GENERATE
 ```
 
 **图表来源**
-- [src/app/api/recommend/route.ts:1-157](file://src/app/api/recommend/route.ts#L1-L157)
+- [src/app/api/recommend/route.ts:1-185](file://src/app/api/recommend/route.ts#L1-L185)
 - [src/app/api/featured/route.ts:1-84](file://src/app/api/featured/route.ts#L1-L84)
 - [src/app/api/generate-art/route.ts:1-61](file://src/app/api/generate-art/route.ts#L1-L61)
-- [src/services/gemini.ts:1-32](file://src/services/gemini.ts#L1-L32)
-- [src/lib/rawg.ts:1-434](file://src/lib/rawg.ts#L1-L434)
+- [.next-joymate/types/app/api/recommend/route.ts:1-348](file://.next-joymate/types/app/api/recommend/route.ts#L1-L348)
+- [.next-joymate/types/app/api/featured/route.ts:1-348](file://.next-joymate/types/app/api/featured/route.ts#L1-L348)
+- [.next-joymate/types/app/api/generate-art/route.ts:1-348](file://.next-joymate/types/app/api/generate-art/route.ts#L1-L348)
 
 **章节来源**
-- [src/app/api/recommend/route.ts:1-157](file://src/app/api/recommend/route.ts#L1-L157)
+- [src/app/api/recommend/route.ts:1-185](file://src/app/api/recommend/route.ts#L1-L185)
 - [src/app/api/featured/route.ts:1-84](file://src/app/api/featured/route.ts#L1-L84)
 - [src/app/api/generate-art/route.ts:1-61](file://src/app/api/generate-art/route.ts#L1-L61)
-- [src/services/gemini.ts:1-32](file://src/services/gemini.ts#L1-L32)
-- [src/lib/rawg.ts:1-434](file://src/lib/rawg.ts#L1-L434)
+- [.next-joymate/types/app/api/recommend/route.ts:1-348](file://.next-joymate/types/app/api/recommend/route.ts#L1-L348)
+- [.next-joymate/types/app/api/featured/route.ts:1-348](file://.next-joymate/types/app/api/featured/route.ts#L1-L348)
+- [.next-joymate/types/app/api/generate-art/route.ts:1-348](file://.next-joymate/types/app/api/generate-art/route.ts#L1-L348)
 
 ## 性能考量
 - 缓存策略
@@ -346,6 +404,9 @@ RAWG --> RAWG_API
 - 输出优化
   - 推荐端点强制 JSON 输出，减少解析开销
   - 图像生成返回 Base64 数据 URI，便于前端直接渲染
+- 类型安全优化
+  - 编译时类型检查，减少运行时错误
+  - 自动补全和IDE支持，提高开发效率
 
 **章节来源**
 - [src/app/api/featured/route.ts:24-82](file://src/app/api/featured/route.ts#L24-L82)
@@ -363,18 +424,20 @@ RAWG --> RAWG_API
   - 查看服务器日志中的事件统计（rawg_enrich、rawg_featured）
   - 使用 gemini.ts 包装函数捕获异常并记录堆栈
   - 在开发环境中临时禁用 RAWG 增强以隔离问题
+  - 利用类型定义文件进行编译时错误检查
 - 配置检查清单
   - 环境变量：RAWG_API_KEY、QWEN_API_KEY、GEMINI_API_KEY
   - RAWG 模式：RAWG_ENRICHMENT（auto/on/off）
   - 网络访问：允许访问 RAWG API 和上游 AI 服务域名
+  - 类型定义：确保.next-joymate/types目录存在且最新
 
 **章节来源**
-- [src/app/api/recommend/route.ts:133-154](file://src/app/api/recommend/route.ts#L133-L154)
+- [src/app/api/recommend/route.ts:152-182](file://src/app/api/recommend/route.ts#L152-L182)
 - [src/app/api/generate-art/route.ts:41-58](file://src/app/api/generate-art/route.ts#L41-L58)
 - [src/services/gemini.ts:8-11](file://src/services/gemini.ts#L8-L11)
 
 ## 结论
-JoyMate 的 API 服务层通过清晰的分层架构实现了高效的 AI 推荐与内容生成功能。三个核心端点分别承担了智能推荐、首页展示和图像生成的职责，配合 RAWG 数据增强和缓存机制，在保证用户体验的同时兼顾了性能与成本控制。gemini.ts 服务封装进一步简化了前端集成，提供了统一的错误处理和响应格式。
+JoyMate 的 API 服务层通过清晰的分层架构实现了高效的 AI 推荐与内容生成功能。三个核心端点分别承担了智能推荐、首页展示和图像生成的职责，配合 RAWG 数据增强和缓存机制，在保证用户体验的同时兼顾了性能与成本控制。新的Next.js App Router类型定义系统进一步增强了代码质量，提供了编译时类型安全和IDE支持。gemini.ts 服务封装进一步简化了前端集成，提供了统一的错误处理和响应格式。
 
 ## 附录
 
@@ -402,6 +465,11 @@ JoyMate 的 API 服务层通过清晰的分层架构实现了高效的 AI 推荐
   - 配置环境变量确保 API Key 正确
   - 监控事件日志进行性能分析
   - 根据流量调整并发参数
+  - 利用类型定义文件进行编译时类型检查
+- 开发工具支持
+  - IDE自动补全和错误提示
+  - 编译时参数类型验证
+  - 运行时配置项的类型安全
 
 **章节来源**
 - [src/services/gemini.ts:1-32](file://src/services/gemini.ts#L1-L32)
